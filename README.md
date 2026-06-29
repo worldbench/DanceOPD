@@ -2,9 +2,7 @@
 
 # ✨ DanceOPD
 
-## On-Policy Generative Field Distillation for Flow-Matching Image Generators
-
-Wei Zhou, Xiongwei Zhu, Zelin Xu, Bo Dong, Lixue Gong, Yongyuan Liang, Meng Chu, Leigang Qu, Lingdong Kong, Wei Liu, Tat-Seng Chua
+## On-Policy Generative Field Distillation
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.27377">
