@@ -1,0 +1,49 @@
+# DanceOPD default config for Stable Diffusion 3.5 Medium.
+# Fill the null fields with your local model/data locations before training.
+
+backend: sd35
+
+model:
+  pretrained_model: null
+
+student:
+  init: base            # base | teacher | full transformer checkpoint
+  lora_rank: 128
+  lora_alpha: 128
+  lora_target_modules: null
+
+teachers:
+  - name: default
+    base_ckpt: null     # optional full/merged transformer checkpoint
+    lora_dir: null      # optional PEFT LoRA directory; can be combined with base_ckpt
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: default
+      weight: 1.0
+
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption]
+
+training:
+  method: danceopd      # danceopd | offpolicy
+  output_dir: null
+  resolution: 1024
+  height: null
+  width: null
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t     # low_t | mid_t | high_t | uniform | stratified
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16
+  gradient_clip: 1.0
+  max_sequence_length: 256
+  log_every: 20

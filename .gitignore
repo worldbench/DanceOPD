@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+.env
+
+# Training artifacts
+data/
+models/
+checkpoints/
+outputs/
+runs/
+wandb/
+logs/
+
+# Large model/data files
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.npy
+*.npz
+*.parquet
+*.arrow
+*.tar
+*.zip
+
+# Generated videos
+*.mp4
+*.mov
+*.webm
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

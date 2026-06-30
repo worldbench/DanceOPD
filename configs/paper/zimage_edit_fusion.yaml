@@ -1,0 +1,68 @@
+# Paper-style DanceOPD config: Z-Image edit-fusion setting.
+# Fill all null / placeholder paths before training. No seed is set.
+
+backend: zimage
+
+model:
+  # Use either local model_paths or ModelScope model_id_with_origin_paths.
+  model_paths: null
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image:transformer/*.safetensors,Tongyi-MAI/Z-Image-Turbo:text_encoder/*.safetensors,Tongyi-MAI/Z-Image-Turbo:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
+
+student:
+  # Paper recipe warm-starts from an edit-capable student/teacher when available.
+  # Use "base" if no public warm-start is available.
+  init: base
+  lora_rank: 128
+  lora_alpha: 128
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+
+teachers:
+  - name: local_edit
+    base_ckpt: null  # optional full/merged DiT checkpoint
+    lora_dir: null   # optional PEFT LoRA directory, e.g. /path/to/local_edit_sft_lora
+    weight: 1.0
+  - name: global_edit
+    base_ckpt: null  # optional full/merged DiT checkpoint
+    lora_dir: null   # optional PEFT LoRA directory, e.g. /path/to/global_edit_sft_lora
+    weight: 1.0
+  - name: t2i
+    base_ckpt: null  # base model route when both fields are null
+    lora_dir: null
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: local_edit
+      weight: 1.0
+    - teacher: global_edit
+      weight: 1.0
+    - teacher: t2i
+      weight: 1.0
+
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption, instruction]
+
+training:
+  method: danceopd
+  output_dir: null
+  resolution: 1024
+  height: null
+  width: null
+  latent_channels: 16
+  latent_downsample_factor: 8
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16
+  gradient_clip: 1.0
+  use_gradient_checkpointing: true
+  log_every: 20

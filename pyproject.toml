@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "danceopd"
+version = "0.1.0"
+description = "Hard-routed on-policy capability-field distillation for flow-matching image generators."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "DanceOPD Authors"}]
+dependencies = [
+  "accelerate>=0.30.0",
+  "pyyaml>=6.0",
+  "safetensors>=0.4.0",
+  "torch>=2.1.0",
+  "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+sd35 = [
+  "diffusers>=0.33.0",
+  "transformers>=4.40.0",
+  "peft>=0.10.0",
+]
+zimage = [
+  "Pillow>=10.0.0",
+  "peft>=0.10.0",
+  "torchvision>=0.16.0",
+  "modelscope>=1.15.0",
+]
+smoke = [
+  "modelscope>=1.15.0",
+]
+data = [
+  "datasets>=2.18.0",
+]
+all = [
+  "diffusers>=0.33.0",
+  "transformers>=4.40.0",
+  "peft>=0.10.0",
+  "Pillow>=10.0.0",
+  "torchvision>=0.16.0",
+  "modelscope>=1.15.0",
+  "datasets>=2.18.0",
+]
+
+[project.scripts]
+danceopd-train = "danceopd.cli.train:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["danceopd*"]

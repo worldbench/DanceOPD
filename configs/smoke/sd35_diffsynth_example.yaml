@@ -1,0 +1,48 @@
+# Official DiffSynth example-data smoke-test config for SD3.5.
+# This runs base-as-teacher identity distillation for a few steps on prompts
+# extracted from DiffSynth-Studio/diffsynth_example_dataset.
+
+backend: sd35
+
+model:
+  pretrained_model: stabilityai/stable-diffusion-3.5-medium
+
+student:
+  init: base
+  lora_rank: 8
+  lora_alpha: 8
+  lora_target_modules: null
+
+teachers:
+  - name: base
+    base_ckpt: null
+    lora_dir: null
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: base
+      weight: 1.0
+
+data:
+  prompts_csv: data/diffsynth_example_dataset/danceopd_prompts.csv
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption]
+
+training:
+  method: danceopd
+  output_dir: outputs/smoke_sd35
+  resolution: 512
+  rollout_steps: 4
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 1
+  max_train_steps: 2
+  save_steps: 1
+  mixed_precision: bf16
+  gradient_clip: 1.0
+  max_sequence_length: 128
+  log_every: 1

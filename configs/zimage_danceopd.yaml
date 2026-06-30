@@ -1,0 +1,53 @@
+# DanceOPD default config for Z-Image through DiffSynth-Studio.
+# Fill the null fields with your local model/data locations before training.
+
+backend: zimage
+
+model:
+  model_paths: null
+  model_id_with_origin_paths: null
+  tokenizer_path: null
+
+student:
+  init: base            # base | teacher | DiT checkpoint
+  lora_rank: 128
+  lora_alpha: 128
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+
+teachers:
+  - name: default
+    base_ckpt: null     # optional full/merged DiT checkpoint
+    lora_dir: null      # optional PEFT LoRA directory; can be combined with base_ckpt
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: default
+      weight: 1.0
+
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption]
+
+training:
+  method: danceopd      # danceopd | offpolicy
+  output_dir: null
+  resolution: 1024
+  height: null
+  width: null
+  latent_channels: 16
+  latent_downsample_factor: 8
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t     # low_t | mid_t | high_t | uniform | stratified
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16
+  gradient_clip: 1.0
+  use_gradient_checkpointing: true
+  log_every: 20

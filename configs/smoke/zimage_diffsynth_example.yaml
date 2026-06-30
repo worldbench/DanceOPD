@@ -1,0 +1,54 @@
+# Official DiffSynth example-data smoke-test config for Z-Image through DiffSynth-Studio.
+# This uses the base model as the frozen teacher and prompts extracted from
+# DiffSynth-Studio/diffsynth_example_dataset.
+
+backend: zimage
+
+model:
+  model_paths: null
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image:transformer/*.safetensors,Tongyi-MAI/Z-Image-Turbo:text_encoder/*.safetensors,Tongyi-MAI/Z-Image-Turbo:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
+
+student:
+  init: base
+  lora_rank: 8
+  lora_alpha: 8
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+
+teachers:
+  - name: base
+    base_ckpt: null
+    lora_dir: null
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: base
+      weight: 1.0
+
+data:
+  prompts_csv: data/diffsynth_example_dataset/danceopd_prompts.csv
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption]
+
+training:
+  method: danceopd
+  output_dir: outputs/smoke_zimage
+  resolution: 512
+  height: null
+  width: null
+  latent_channels: 16
+  latent_downsample_factor: 8
+  rollout_steps: 4
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 1
+  max_train_steps: 2
+  save_steps: 1
+  mixed_precision: bf16
+  gradient_clip: 1.0
+  use_gradient_checkpointing: true
+  log_every: 1

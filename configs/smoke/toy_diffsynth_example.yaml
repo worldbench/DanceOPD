@@ -1,0 +1,35 @@
+# Zero-weight end-to-end smoke config.
+# Uses prompts extracted from DiffSynth-Studio/diffsynth_example_dataset, but
+# runs a tiny local torch backend instead of loading public model weights.
+
+backend: toy
+
+teachers:
+  - name: base
+    weight: 1.0
+
+routing:
+  routes:
+    - teacher: base
+      weight: 1.0
+
+data:
+  prompts_csv: data/diffsynth_example_dataset/danceopd_prompts.csv
+  prompt_column: prompt
+  caption_dict_column: caption_dict
+  caption_dict_keys: [prompt, caption]
+
+training:
+  method: danceopd
+  output_dir: outputs/smoke_toy
+  rollout_steps: 4
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  weight_decay: 0.0
+  grad_accum: 1
+  max_train_steps: 2
+  save_steps: 1
+  mixed_precision: 'no'
+  gradient_clip: 1.0
+  log_every: 1
