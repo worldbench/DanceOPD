@@ -56,10 +56,6 @@ Modern image generation systems increasingly need one deployed model to combine 
 
 **DanceOPD** treats each source capability as a **velocity field**. For every training step, it samples one route, rolls out the current student, queries the selected frozen teacher on a low-noise state from that student trajectory, and updates the student with a simple velocity-MSE objective. This gives a compact and extensible recipe for post-training flow-matching generators without bundling task-specific training code into the core algorithm.
 
-<div align="center">
-<img src="assets/overview.png" width="88%" alt="DanceOPD method overview">
-</div>
-
 ---
 
 
@@ -78,18 +74,18 @@ Modern image generation systems increasingly need one deployed model to combine 
 DanceOPD uses the following update:
 
 <div align="center">
-<img src="assets/fig2_method_query.png" width="92%" alt="DanceOPD query construction">
+<img src="assets/danceopd_method.gif" width="92%" alt="DanceOPD method animation">
 </div>
 
-For a route \(m\), prompt or condition \(c\), student rollout state \(z_t^\theta\), and frozen teacher field \(v_m\):
+For a route $m$, prompt or condition $c$, student rollout state $z_t^\theta$, and frozen teacher field $v_m$:
 
-\[
+$$
 \mathcal{L}_{\text{DanceOPD}}
 = \mathbb{E}_{m,c,t}\left[
 \left\|v_\theta(\operatorname{sg}(z_t^\theta), t, c)
 - v_m(\operatorname{sg}(z_t^\theta), t, c)\right\|_2^2
 \right].
-\]
+$$
 
 Minimal pseudocode:
 
