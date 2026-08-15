@@ -1,0 +1,9 @@
+task,prompt,source_image,target_image
+ocr,"A clean poster that says 'DANCE WITH THE FLOW' in large black letters",,
+ocr,"A storefront sign reading 'OPEN ALL NIGHT', centered and legible",,
+ocr,"A white coffee mug printed with the words 'WORLD BENCH'",,
+ocr,"A red book cover titled 'ON POLICY DISTILLATION'",,
+geneval,"Two red cubes and one blue sphere on a wooden table",,
+geneval,"A photo of three green apples beside a yellow banana",,
+geneval,"A small dog to the left of a large bicycle",,
+geneval,"A blue vase above a closed orange book",,

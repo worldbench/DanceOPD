@@ -1,6 +1,5 @@
 # Official DiffSynth example-data smoke-test config for SD3.5.
-# This runs base-as-teacher identity distillation for a few steps on prompts
-# extracted from DiffSynth-Studio/diffsynth_example_dataset.
+# The OCR warm start and clean base teacher produce a nonzero update.
 
 backend: sd35
 
@@ -8,7 +7,7 @@ model:
   pretrained_model: stabilityai/stable-diffusion-3.5-medium
 
 student:
-  init: base
+  init: jieliu/SD3.5M-FlowGRPO-Text
   lora_rank: 8
   lora_alpha: 8
   lora_target_modules: null

@@ -12,7 +12,7 @@ class DanceOPDBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def compute_loss(self, prompt: str, route) -> torch.Tensor:
+    def compute_loss(self, sample, route) -> torch.Tensor:
         raise NotImplementedError
 
     @abstractmethod
@@ -26,6 +26,10 @@ class DanceOPDBackend(ABC):
     @abstractmethod
     def save(self, step: int) -> None:
         raise NotImplementedError
+
+    def resume(self, checkpoint_dir: str) -> int:
+        """Restore model/adapter and optimizer state, returning the saved step."""
+        raise NotImplementedError(f"{type(self).__name__} does not implement resume()")
 
     def close(self) -> None:
         return None

@@ -36,12 +36,6 @@
   </a>
 </p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Backends-SD3.5%20%7C%20Z--Image-7C3AED?style=flat-square" alt="Backends">
-  <img src="https://img.shields.io/badge/Training-On--Policy%20Distillation-06B6D4?style=flat-square" alt="On-Policy Distillation">
-  <img src="https://img.shields.io/badge/Student-LoRA-F59E0B?style=flat-square" alt="LoRA Student">
-</p>
-
 <br><br>
 
 <img src="assets/fig1.png" width="92%" alt="DanceOPD overview">
@@ -64,7 +58,8 @@ Modern image generation systems increasingly need one deployed model to combine 
 - **On-policy field query.** Teachers supervise states visited by the current student, not offline or teacher-only states.
 - **Hard-routed capability matching.** Each sample is assigned to one semantically valid teacher field, avoiding ambiguous multi-field averages.
 - **Semantic-side query.** The default uses one low-noise query state (`K=1`) per rollout.
-- **Plain objective.** The public default is direct velocity MSE; no reward model or adversarial critic is required.
+- **Three training methods.** `danceopd` (single-query on-policy ODE), `diffusionopd` (dense on-policy ODE-KL), and `flowopd` (on-policy SDE + KL reward + clipped PPO).
+- **Plain core objective.** DanceOPD uses direct velocity MSE; no reward model or adversarial critic is required.
 - **Backend-extensible.** The same core trainer supports SD3.5 and Z-Image, and can be extended to other flow backbones.
 
 ---
@@ -77,28 +72,28 @@ DanceOPD uses the following update:
 <img src="assets/danceopd_method.gif" width="92%" alt="DanceOPD method animation">
 </div>
 
-For a route $m$, prompt or condition $c$, student rollout state $z_t^\theta$, and frozen teacher field $v_m$:
+For a route \(m\), prompt or condition \(c\), student rollout state \(z_t^\theta\), and frozen teacher field \(v_m\):
 
-$$
+\[
 \mathcal{L}_{\text{DanceOPD}}
 = \mathbb{E}_{m,c,t}\left[
 \left\|v_\theta(\operatorname{sg}(z_t^\theta), t, c)
 - v_m(\operatorname{sg}(z_t^\theta), t, c)\right\|_2^2
 \right].
-$$
+\]
 
 Minimal pseudocode:
 
 ```python
-route = router.sample()                         # hard route one teacher
-prompt = prompt_dataset.sample(route)
-trajectory = rollout(student, prompt)           # current student trajectory
+route = router.sample()                         # hard route: choose teacher m
+sample = dataset.sample(route.dataset)          # then draw (x,c) ~ D_m
+trajectory = rollout(student, sample)           # current student trajectory
 state = sample_low_noise_state(trajectory)      # default: K = 1
 
 with torch.no_grad():
-    target = teacher[route].velocity(state, prompt)
+    target = teacher[route].velocity(state, sample)
 
-pred = student.velocity(state, prompt)
+pred = student.velocity(state, sample)
 loss = mse(pred, target)
 loss.backward()
 ```
@@ -206,6 +201,8 @@ pip install -e ".[all,smoke,data]"
 ```
 
 The Z-Image backend additionally imports `diffsynth.pipelines.z_image`. Install DiffSynth-Studio following its upstream Z-Image instructions before running full Z-Image training. The config dry-run does not need DiffSynth-Studio.
+Release validation used DiffSynth-Studio `2.1.2` at commit
+`6343deda06b3e09efc9b1ce23c135c35a341d143`.
 
 Configure Accelerate if you use distributed training:
 
@@ -214,6 +211,79 @@ accelerate config
 ```
 
 ---
+
+## Public runnable matrix
+
+The paper edit teachers/checkpoints are not published. The public configs use downloadable substitutes and bundled small prompt sets so the code can be exercised without those assets.
+
+| Backend | Public default model | Public initialization/teachers | Runnable code modes |
+|---|---|---|---|
+| SD3.5-M | `stabilityai/stable-diffusion-3.5-medium` | Flow-OPD OCR + GenEval LoRAs (`jieliu/...`) | all three |
+| Z-Image-Turbo | `Tongyi-MAI/Z-Image-Turbo` | student: Ostris warm start; teacher: clean frozen base | all three |
+
+“All three” describes what this release implements, not a claim that the paper
+evaluates every method on both backbones. The paper's main composition and
+DiffusionOPD/Flow-OPD comparisons use Z-Image; SD3.5-M is used for the
+realism-field setting. The downloadable teachers and warm starts above are
+public smoke substitutes, not the unreleased paper checkpoints.
+
+```bash
+# backend: sd35 or zimage; method: danceopd, diffusionopd, flowopd
+bash scripts/train_public.sh sd35 danceopd
+# Selects configs/public/sd35_flowopd.yaml: SD3.5-M, rank 32,
+# 10 dense states, group 16, eta 0.7, OCR:GenEval=1:3.
+bash scripts/train_public.sh sd35 flowopd
+bash scripts/train_public.sh zimage diffusionopd --set training.max_train_steps=1
+```
+
+`configs/paper/` never silently substitutes public weights: it retains explicit
+checkpoint placeholders and paper-aligned experiment topology/settings.
+Where the manuscript does not specify a main-table initialization, the template
+labels that initialization as unspecified instead of presenting an inferred
+choice as exact. `configs/public/` is the runnable fallback.
+
+Paper-aligned templates:
+
+| Template | Backend | Purpose |
+|---|---|---|
+| `configs/paper/zimage_t2i_edit.yaml` | Z-Image | T2I + joint Edit |
+| `configs/paper/zimage_edit_fusion.yaml` | Z-Image | Local + Global Edit |
+| `configs/paper/zimage_three_bucket_diagnostic.yaml` | Z-Image | three-bucket diagnostic |
+| `configs/paper/sd35_realism_absorption.yaml` | SD3.5-M | realism-field absorption |
+| `configs/paper/baselines/zimage_*_diffusionopd.yaml` | Z-Image | Table-2 DiffusionOPD |
+| `configs/paper/baselines/zimage_*_flowopd.yaml` | Z-Image | Table-2 Flow-OPD |
+
+### Method semantics
+
+- `danceopd`: route first, sample from its matching bucket, roll out the current student with ODE, query `K` states (`K=1` default), velocity MSE.
+- `diffusionopd`: deterministic student ODE rollout, dense queries, and the DiffusionOPD ODE-KL weight `(dt²/2)` summed over states.
+- `flowopd`: Flow-OPD SDE rollout with cached old log-probabilities, teacher transition-mean KL reward, PPO ratio clipping, and global trajectory groups. Generic smoke configs use group size 1; the direct SD3.5-M and Table-2 baseline configs use group size 16. The paper's Z-Image reproduction disables MAR (`beta=0`); optional MAR support is an engineering compatibility feature and requires a separate compatible anchor teacher.
+
+The separate `offpolicy` ablation performs no rollout: it forward-noises a
+dataset target latent for edit rows or a random endpoint for prompt-only T2I.
+
+### Optional CFG-field absorption
+
+CFG absorption is an ordinary training option, not a separate experiment
+config. All released configs default to the standard conditional fields:
+
+```yaml
+training:
+  teacher_cfg_scale: 1.0
+  student_cfg_scale: 1.0
+```
+
+To absorb a guided teacher field into a single-pass student, keep
+`student_cfg_scale=1.0` and override only `teacher_cfg_scale` (for example,
+`3.5`). The teacher target becomes
+`v_empty + alpha * (v_cond - v_empty)`. External inference CFG can compound
+the absorbed effect, so tune the inference scale separately.
+
+The paper defines the absorbed teacher scale and keeps the training student
+field unguided. Values of `student_cfg_scale` other than `1.0` are an additional
+release option, not a paper-reproduction setting.
+
+Ordinary gradient-accumulation microbatches reuse one globally broadcast route. For the updated DiffusionOPD/FlowOPD G=M recipe, set `routing.accumulation_groups` to route dataset names; every bucket remains bound to its matching teacher and the losses are averaged in one optimizer update.
 
 ## 🚀 Quick Start
 
@@ -248,7 +318,7 @@ bash scripts/smoke_sd35.sh
 bash scripts/smoke_zimage.sh
 ```
 
-The smoke path uses the official `DiffSynth-Studio/diffsynth_example_dataset` instead of bundling custom sample data. By default it selects `z_image/Z-Image`, extracts prompts from `metadata.csv`, writes `data/diffsynth_example_dataset/danceopd_prompts.csv`, uses LoRA rank 8, runs a 4-step rollout for 2 optimizer steps, and saves under `outputs/smoke_*`.
+The smoke path uses the official `DiffSynth-Studio/diffsynth_example_dataset` instead of bundling custom sample data. By default it selects `z_image/Z-Image`, extracts prompts from `metadata.csv`, writes `data/diffsynth_example_dataset/danceopd_prompts.csv`, runs a 4-step rollout for 2 optimizer steps, and saves under `outputs/smoke_*`. The SD3.5 smoke uses rank 8; the Z-Image smoke uses rank 64 to match its downloadable warm-start adapter.
 
 If a dependency is missing, the smoke scripts fail early with an install hint. To reuse an already downloaded dataset without ModelScope, set `DIFFSYNTH_NO_DOWNLOAD=1`.
 
@@ -260,7 +330,7 @@ bash scripts/prepare_diffsynth_example.sh
 
 ### 2. Move from smoke test to your own teachers
 
-For real DanceOPD training, prepare a prompt CSV and fill the path-free config template. The public repo does not include our internal teacher LoRAs or student checkpoints.
+For real DanceOPD training, prepare a routed CSV and fill the path-free config template. This release does not include the paper teacher LoRAs or student checkpoints.
 
 ```csv
 prompt
@@ -287,6 +357,64 @@ Teacher fields use one shared interface:
 The student LoRA is created separately from frozen teachers; teacher LoRAs are
 merged into clean teacher modules, not stacked on top of the student's training
 adapter.
+
+For image editing, generate the routed CSV directly from OmniEdit metadata:
+
+```bash
+python examples/prepare_omniedit.py \
+  --input TIGER-Lab/OmniEdit-Filtered-1.2M \
+  --output data/omniedit_danceopd.csv \
+  --format danceopd \
+  --max-rows 1000
+```
+
+HF input streams by default. The helper materializes source/target JPEGs and
+emits `local_edit`/`global_edit` buckets; the trainer checks all buckets and
+image paths before loading model weights. It recognizes the official
+`src_img`, `edited_img`, `edited_prompt_list`, `task`, `o_score`, and
+`omni_edit_id` fields. Style/background/environment-like tasks map to
+`global_edit`; other edits map to `local_edit`. Override ambiguous categories:
+
+```bash
+python examples/prepare_omniedit.py \
+  --input TIGER-Lab/OmniEdit-Filtered-1.2M \
+  --output data/omniedit_danceopd.csv \
+  --format danceopd \
+  --task-map 'style change=global_edit,object swap=local_edit' \
+  --max-rows 1000
+```
+
+Normalized DanceOPD schema:
+
+```csv
+uid,task,raw_task,prompt,source_image,target_image,caption_dict
+```
+
+Use `--format prompts` only for prompt-only T2I routes. Edit routes require a
+materialized `source_image`; `offpolicy` edit training also requires
+`target_image`.
+
+To prepare normalized SFT pairs instead:
+
+```bash
+python examples/prepare_omniedit.py \
+  --input TIGER-Lab/OmniEdit-Filtered-1.2M \
+  --output data/omniedit_sft_pairs.csv \
+  --format sft_pairs \
+  --max-rows 1000
+```
+
+```csv
+uid,source_image,edited_image,prompt,task,caption_dict
+```
+
+Suggested route split:
+
+| Route | Example tasks | Purpose |
+|---|---|---|
+| `local_edit` | add, remove, replace, color, material, object | preservation-heavy edits |
+| `global_edit` | background, environment, weather, style, tone | global transformations |
+| `t2i` | prompt-only rows | base text-to-image anchor |
 
 Key default recipe:
 
@@ -324,6 +452,14 @@ accelerate launch -m danceopd.cli.train \
   --config configs/zimage_danceopd.yaml
 ```
 
+Resume from any saved step (adapter + optimizer state):
+
+```bash
+accelerate launch -m danceopd.cli.train \
+  --config configs/zimage_danceopd.yaml \
+  --set training.resume_from=outputs/run/step-300
+```
+
 You can override paths directly from the command line:
 
 ```bash
@@ -333,6 +469,27 @@ accelerate launch -m danceopd.cli.train \
   --set teachers.0.base_ckpt='<TEACHER_TRANSFORMER_CKPT>' \
   --set teachers.0.lora_dir='<TEACHER_LORA_DIR>' \
   --set data.prompts_csv='<PROMPTS_CSV>' \
+  --set training.output_dir='<OUTPUT_DIR>'
+```
+
+Paper-template examples:
+
+```bash
+# Z-Image Local + Global Edit
+accelerate launch -m danceopd.cli.train \
+  --config configs/paper/zimage_edit_fusion.yaml \
+  --set data.prompts_csv=data/omniedit_danceopd.csv \
+  --set student.init='<STUDENT_LORA_INIT>' \
+  --set teachers.0.lora_dir='<LOCAL_EDIT_LORA>' \
+  --set teachers.1.lora_dir='<GLOBAL_EDIT_LORA>' \
+  --set training.output_dir='<OUTPUT_DIR>'
+
+# SD3.5-M realism-field absorption
+accelerate launch -m danceopd.cli.train \
+  --config configs/paper/sd35_realism_absorption.yaml \
+  --set model.pretrained_model='<SD35_MODEL_DIR>' \
+  --set data.prompts_csv=data/realism_prompts.csv \
+  --set teachers.0.base_ckpt='<FULL_REALISM_TEACHER_CHECKPOINT>' \
   --set training.output_dir='<OUTPUT_DIR>'
 ```
 
@@ -346,7 +503,21 @@ accelerate launch -m danceopd.cli.train \
 | SD3.5 / Diffusers | `danceopd.backends.sd35_diffusers` | full transformer checkpoint and/or PEFT LoRA | PEFT LoRA |
 | Z-Image / DiffSynth | `danceopd.backends.zimage_diffsynth` | DiT checkpoint and/or PEFT LoRA | PEFT LoRA |
 
-To add a new model family, implement `DanceOPDBackend` and register it in `danceopd/core/engine.py`.
+To add a new model family, implement `DanceOPDBackend` and register it in
+`danceopd/core/engine.py`:
+
+```python
+class MyBackend(DanceOPDBackend):
+    def prepare(self): ...
+    def compute_loss(self, sample, route): ...
+    def backward(self, loss): ...
+    def optimizer_step(self): ...
+    def save(self, step): ...
+```
+
+The core engine owns routed data sampling, gradient accumulation, logging, and
+checkpoint cadence. Use `ToyBackend` as the smallest complete example and
+`SD35Backend` as the real-model reference.
 
 ---
 
@@ -361,7 +532,6 @@ danceopd/
 configs/       # path-free default configs
 scripts/       # launch helpers
 examples/      # DiffSynth and OmniEdit data preparation helpers
-GUIDE.md       # consolidated method, config, and reproducibility guide
 assets/        # README figures
 ```
 
@@ -372,19 +542,23 @@ assets/        # README figures
 Validate config structure without loading models:
 
 ```bash
-python -m danceopd.cli.train --config configs/sd35_danceopd.yaml --dry-run
-python -m danceopd.cli.train --config configs/zimage_danceopd.yaml --dry-run
+python -m danceopd.cli.train --config configs/public/sd35.yaml --dry-run
+python -m danceopd.cli.train --config configs/public/zimage.yaml --dry-run
 ```
 
 ---
 
 ## 🔁 Reproducibility Scope
 
-This repository releases the DanceOPD training code, public smoke tests, data adapters, and paper-style config templates. It does **not** release our internal teacher LoRAs or student checkpoints. To reproduce the full pipeline with public assets, prepare OmniEdit-style edit data, train compatible SFT teacher LoRAs or full teacher checkpoints, then run DanceOPD with those teachers.
+This repository releases the DanceOPD training code, public smoke tests, data adapters, and paper-style config templates. It does **not** release the paper teacher LoRAs or student checkpoints. To reproduce the full pipeline with public assets, prepare OmniEdit-style edit data, train compatible SFT teacher LoRAs or full teacher checkpoints, then run DanceOPD with those teachers.
+
+Repository code is Apache-2.0. Upstream model and adapter weights retain their
+own terms. Accept the Stable Diffusion 3.5 model license and review each Z-Image
+or adapter model card before use; the repository license does not relicense
+downloaded weights.
 
 Useful docs:
 
-- [`GUIDE.md`](GUIDE.md): method, configs, smoke tests, OmniEdit preprocessing, SFT teacher interface, and reproducibility notes.
 - [`configs/paper/`](configs/paper/): path-free paper config templates.
 
 ---

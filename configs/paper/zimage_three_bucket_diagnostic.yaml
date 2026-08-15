@@ -1,0 +1,37 @@
+# Diagnostic only: Local + Global + T2I. Not a main two-bucket experiment.
+backend: zimage
+model:
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image:transformer/*.safetensors,Tongyi-MAI/Z-Image:text_encoder/*.safetensors,Tongyi-MAI/Z-Image:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
+student:
+  init: /path/to/attribute_edit_student_init.safetensors
+  lora_rank: 128
+  lora_alpha: 128
+teachers:
+  - {name: local_edit, lora_dir: /path/to/local_edit_teacher.safetensors}
+  - {name: global_edit, lora_dir: /path/to/global_edit_teacher.safetensors}
+  - {name: t2i, lora_dir: null}
+routing:
+  granularity: optimizer_step
+  routes:
+    - {teacher: local_edit, dataset: local_edit, requires_source_image: true, weight: 1.0}
+    - {teacher: global_edit, dataset: global_edit, requires_source_image: true, weight: 1.0}
+    - {teacher: t2i, dataset: t2i, weight: 1.0}
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  task_column: task
+  source_image_column: source_image
+  target_image_column: target_image
+training:
+  method: danceopd
+  output_dir: null
+  resolution: 1024
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16

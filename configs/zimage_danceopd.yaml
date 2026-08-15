@@ -32,7 +32,7 @@ data:
   caption_dict_keys: [prompt, caption]
 
 training:
-  method: danceopd      # danceopd | offpolicy
+  method: danceopd      # danceopd | diffusionopd | flowopd | offpolicy (ablation)
   output_dir: null
   resolution: 1024
   height: null

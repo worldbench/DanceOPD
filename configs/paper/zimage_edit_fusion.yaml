@@ -10,9 +10,10 @@ model:
   tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
 
 student:
-  # Paper recipe warm-starts from an edit-capable student/teacher when available.
-  # Use "base" if no public warm-start is available.
-  init: base
+  # The manuscript does not state the exact initialization for this Table-2
+  # main run. Supply the checkpoint used by your reproduction; paper configs
+  # never fall back to the public Ostris adapter.
+  init: /path/to/unspecified_main_table_student_init.safetensors
   lora_rank: 128
   lora_alpha: 128
   lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
@@ -20,24 +21,22 @@ student:
 teachers:
   - name: local_edit
     base_ckpt: null  # optional full/merged DiT checkpoint
-    lora_dir: null   # optional PEFT LoRA directory, e.g. /path/to/local_edit_sft_lora
+    lora_dir: /path/to/local_edit_teacher.safetensors
     weight: 1.0
   - name: global_edit
     base_ckpt: null  # optional full/merged DiT checkpoint
-    lora_dir: null   # optional PEFT LoRA directory, e.g. /path/to/global_edit_sft_lora
+    lora_dir: /path/to/global_edit_teacher.safetensors
     weight: 1.0
-  - name: t2i
-    base_ckpt: null  # base model route when both fields are null
-    lora_dir: null
-    weight: 1.0
-
 routing:
+  granularity: optimizer_step
   routes:
     - teacher: local_edit
+      dataset: local_edit
+      requires_source_image: true
       weight: 1.0
     - teacher: global_edit
-      weight: 1.0
-    - teacher: t2i
+      dataset: global_edit
+      requires_source_image: true
       weight: 1.0
 
 data:
@@ -45,6 +44,9 @@ data:
   prompt_column: prompt
   caption_dict_column: caption_dict
   caption_dict_keys: [prompt, caption, instruction]
+  task_column: task
+  source_image_column: source_image
+  target_image_column: target_image
 
 training:
   method: danceopd

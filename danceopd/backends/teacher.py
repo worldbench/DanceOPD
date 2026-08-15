@@ -1,13 +1,29 @@
 """Shared helpers for building frozen DanceOPD teacher fields."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import torch
 
-
 Logger = Callable[[str], None]
+
+
+def resolve_checkpoint(value: str | Path) -> str:
+    """Resolve local paths or ``hf://repo_id/path`` without custom scripts."""
+    text = str(value)
+    if not text.startswith("hf://"):
+        return text
+    spec = text[len("hf://") :]
+    parts = spec.split("/")
+    if len(parts) < 3:
+        raise ValueError(f"HF checkpoint must be hf://owner/repo/file: {text}")
+    repo_id = "/".join(parts[:2])
+    filename = "/".join(parts[2:])
+    from huggingface_hub import hf_hub_download
+
+    return hf_hub_download(repo_id=repo_id, filename=filename)
 
 
 def load_state_dict_file(path: str | Path) -> dict[str, torch.Tensor]:
@@ -18,13 +34,19 @@ def load_state_dict_file(path: str | Path) -> dict[str, torch.Tensor]:
     `lora_dir` instead of `base_ckpt`.
     """
 
-    path = Path(path)
+    path = Path(resolve_checkpoint(path))
     if path.suffix == ".safetensors":
         from safetensors.torch import load_file
 
         state = load_file(str(path))
     else:
-        state = torch.load(str(path), map_location="cpu")
+        try:
+            state = torch.load(str(path), map_location="cpu", weights_only=True)
+        except TypeError as exc:
+            raise RuntimeError(
+                "Safe checkpoint loading requires a PyTorch version that supports "
+                "torch.load(..., weights_only=True). Upgrade PyTorch or convert the file to safetensors."
+            ) from exc
 
     if isinstance(state, dict):
         for key in ("state_dict", "model", "module", "transformer", "dit"):
@@ -41,10 +63,39 @@ def load_state_dict_file(path: str | Path) -> dict[str, torch.Tensor]:
     for key, value in state.items():
         new_key = str(key)
         for prefix in ("module.", "model."):
-            if new_key.startswith(prefix):
-                new_key = new_key[len(prefix) :]
+            new_key = new_key.removeprefix(prefix)
         cleaned[new_key] = value
     return cleaned
+
+
+def load_compatible_state_dict(
+    module: torch.nn.Module,
+    state: dict[str, torch.Tensor],
+    *,
+    label: str,
+    log: Logger,
+    min_model_match: float = 0.5,
+) -> int:
+    """Load only shape-compatible tensors and reject ineffective checkpoints."""
+
+    expected = module.state_dict()
+    compatible = {
+        key: value
+        for key, value in state.items()
+        if key in expected and isinstance(value, torch.Tensor) and expected[key].shape == value.shape
+    }
+    ratio = len(compatible) / max(1, len(expected))
+    if not compatible or ratio < min_model_match:
+        raise RuntimeError(
+            f"{label} is incompatible with this model: matched {len(compatible)}/{len(expected)} "
+            f"model tensors ({ratio:.1%}); required at least {min_model_match:.1%}."
+        )
+    missing, unexpected = module.load_state_dict(compatible, strict=False)
+    log(
+        f"{label} loaded compatible={len(compatible)}/{len(expected)} "
+        f"missing={len(missing)} unexpected={len(unexpected)}"
+    )
+    return len(compatible)
 
 
 def load_full_checkpoint(module: torch.nn.Module, checkpoint: str | Path | None, *, label: str, log: Logger) -> None:
@@ -53,11 +104,7 @@ def load_full_checkpoint(module: torch.nn.Module, checkpoint: str | Path | None,
     if not checkpoint:
         return
     state = load_state_dict_file(checkpoint)
-    missing, unexpected = module.load_state_dict(state, strict=False)
-    log(
-        f"{label} full checkpoint loaded tensors={len(state)} "
-        f"missing={len(missing)} unexpected={len(unexpected)}"
-    )
+    load_compatible_state_dict(module, state, label=f"{label} full checkpoint", log=log)
 
 
 def merge_lora(module: torch.nn.Module, lora_dir: str | Path | None, *, label: str, log: Logger) -> torch.nn.Module:
@@ -65,9 +112,16 @@ def merge_lora(module: torch.nn.Module, lora_dir: str | Path | None, *, label: s
 
     if not lora_dir:
         return module
+    resolved = resolve_checkpoint(lora_dir)
+    if Path(resolved).is_file():
+        raise ValueError(
+            f"{label} received a single-file LoRA ({resolved}). This generic backend cannot infer "
+            "its rank and target modules safely. Provide a PEFT adapter directory/model ID, or use "
+            "the Z-Image backend's explicit raw-LoRA fields."
+        )
     from peft import PeftModel
 
-    teacher = PeftModel.from_pretrained(module, str(lora_dir), is_trainable=False)
+    teacher = PeftModel.from_pretrained(module, resolved, is_trainable=False)
     teacher = teacher.merge_and_unload()
     log(f"{label} PEFT LoRA merged")
     return teacher

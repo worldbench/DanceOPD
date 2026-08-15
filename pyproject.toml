@@ -4,46 +4,52 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "danceopd"
-version = "0.1.0"
+version = "0.2.0"
 description = "Hard-routed on-policy capability-field distillation for flow-matching image generators."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 authors = [{name = "DanceOPD Authors"}]
 dependencies = [
-  "accelerate>=0.30.0",
-  "pyyaml>=6.0",
-  "safetensors>=0.4.0",
-  "torch>=2.1.0",
-  "tqdm>=4.66.0",
+  "accelerate>=0.30.0,<2",
+  "pyyaml>=6.0,<7",
+  "safetensors>=0.4.0,<1",
+  "torch>=2.1.0,<3",
+  "tqdm>=4.66.0,<5",
 ]
 
 [project.optional-dependencies]
 sd35 = [
-  "diffusers>=0.33.0",
-  "transformers>=4.40.0",
-  "peft>=0.10.0",
+  "diffusers>=0.33.0,<1",
+  "transformers>=4.40.0,<6",
+  "peft>=0.10.0,<1",
 ]
 zimage = [
-  "Pillow>=10.0.0",
-  "peft>=0.10.0",
-  "torchvision>=0.16.0",
-  "modelscope>=1.15.0",
+  "Pillow>=10.0.0,<13",
+  "peft>=0.10.0,<1",
+  "torchvision>=0.16.0,<1",
+  "modelscope>=1.15.0,<2",
 ]
 smoke = [
-  "modelscope>=1.15.0",
+  "modelscope>=1.15.0,<2",
 ]
 data = [
-  "datasets>=2.18.0",
+  "datasets>=2.18.0,<6",
+  "Pillow>=10.0.0,<13",
+]
+dev = [
+  "build>=1.2,<2",
+  "pytest>=8.0,<9",
+  "ruff>=0.6,<1",
 ]
 all = [
-  "diffusers>=0.33.0",
-  "transformers>=4.40.0",
-  "peft>=0.10.0",
-  "Pillow>=10.0.0",
-  "torchvision>=0.16.0",
-  "modelscope>=1.15.0",
-  "datasets>=2.18.0",
+  "diffusers>=0.33.0,<1",
+  "transformers>=4.40.0,<6",
+  "peft>=0.10.0,<1",
+  "Pillow>=10.0.0,<13",
+  "torchvision>=0.16.0,<1",
+  "modelscope>=1.15.0,<2",
+  "datasets>=2.18.0,<6",
 ]
 
 [project.scripts]
@@ -52,3 +58,7 @@ danceopd-train = "danceopd.cli.train:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["danceopd*"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120

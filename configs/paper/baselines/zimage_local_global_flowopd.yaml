@@ -1,0 +1,48 @@
+# Paper Table 2B / Sec. 8.3: Flow-OPD, Local + Global Edit.
+backend: zimage
+model:
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image:transformer/*.safetensors,Tongyi-MAI/Z-Image:text_encoder/*.safetensors,Tongyi-MAI/Z-Image:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
+student:
+  # Sec. 8.3 explicitly uses a merged initialization for Flow-OPD.
+  init: /path/to/local_global_merged_init.safetensors
+  lora_rank: 128
+  lora_alpha: 128
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+teachers:
+  - {name: local_edit, base_ckpt: null, lora_dir: /path/to/local_edit_teacher.safetensors}
+  - {name: global_edit, base_ckpt: null, lora_dir: /path/to/global_edit_teacher.safetensors}
+routing:
+  granularity: optimizer_step
+  # Updated Table-2 implementation: both capability buckets contribute to one
+  # optimizer update and their losses are averaged (G=M=2).
+  accumulation_groups: [local_edit, global_edit]
+  routes:
+    - {teacher: local_edit, dataset: local_edit, requires_source_image: true, weight: 1.0}
+    - {teacher: global_edit, dataset: global_edit, requires_source_image: true, weight: 1.0}
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  task_column: task
+  source_image_column: source_image
+  target_image_column: target_image
+training:
+  method: flowopd
+  output_dir: null
+  resolution: 1024
+  rollout_steps: 16
+  lr: 2.0e-4
+  grad_accum: 1
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16
+  teacher_cfg_scale: 1.0
+  student_cfg_scale: 1.0
+  flowopd_noise_level: 0.7
+  flowopd_group_size: 16
+  flowopd_k_states: 16
+  flowopd_query_bias: uniform
+  flowopd_clip_range: 1.0e-4
+  flowopd_kl_scale: -1.0
+  flowopd_anchor_beta: 0.0
+  use_gradient_checkpointing: true

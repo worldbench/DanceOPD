@@ -1,0 +1,36 @@
+# Paper Sec. 4.1C / Fig. 4(a): SD3.5-M realism-field absorption.
+# The realism teacher is an unreleased full-parameter checkpoint; fill its path.
+backend: sd35
+model:
+  pretrained_model: stabilityai/stable-diffusion-3.5-medium
+student:
+  init: base
+  lora_rank: 128
+  lora_alpha: 128
+teachers:
+  - name: realism
+    base_ckpt: /path/to/full_parameter_realism_teacher
+    lora_dir: null
+routing:
+  granularity: optimizer_step
+  routes:
+    - {teacher: realism, dataset: realism, weight: 1.0}
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  task_column: task
+training:
+  method: danceopd
+  output_dir: null
+  resolution: 1024
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t
+  # Realism absorption matches the ordinary realism-teacher field, not CFG.
+  teacher_cfg_scale: 1.0
+  student_cfg_scale: 1.0
+  lr: 2.0e-4
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16

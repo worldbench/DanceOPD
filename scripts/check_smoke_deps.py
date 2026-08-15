@@ -6,8 +6,8 @@ import argparse
 import importlib.util
 import shutil
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 
 @dataclass(frozen=True)

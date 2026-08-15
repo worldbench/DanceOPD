@@ -46,10 +46,10 @@ def _parse_mapping(text: str) -> dict[str, Any] | None:
         return None
     try:
         value = json.loads(text)
-    except Exception:
+    except (json.JSONDecodeError, TypeError):
         try:
             value = ast.literal_eval(text)
-        except Exception:
+        except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
             return None
     return value if isinstance(value, dict) else None
 
@@ -100,7 +100,7 @@ def _download(args: argparse.Namespace) -> None:
             allow_file_pattern=include,
         )
         return
-    except Exception as py_exc:
+    except Exception as py_exc:  # noqa: BLE001 - fall back to the CLI for any SDK/runtime failure.
         print(f"[prepare_diffsynth_example] Python ModelScope download failed: {py_exc}", file=sys.stderr)
 
     cmd = [
@@ -125,7 +125,7 @@ def _find_metadata(local_dir: Path, subset: str) -> Path:
     candidates.extend(local_dir.rglob("metadata.csv"))
     if not candidates:
         raise FileNotFoundError(f"No metadata.csv found under {local_dir}. Did the dataset download succeed?")
-    return sorted(candidates, key=lambda p: (len(p.parts), str(p)))[0]
+    return min(candidates, key=lambda p: (len(p.parts), str(p)))
 
 
 def _extract_prompts(metadata_path: Path, output_path: Path, max_rows: int) -> int:

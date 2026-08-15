@@ -13,9 +13,9 @@ import torch
 from safetensors.torch import save_file
 
 from danceopd.backends.base import DanceOPDBackend
-from danceopd.core.checkpoint import ensure_output_dir, step_dir
+from danceopd.core.checkpoint import ensure_output_dir, load_trainer_state, save_trainer_state, step_dir
 from danceopd.core.loss import velocity_mse
-from danceopd.core.timestep import sample_query_indices
+from danceopd.core.methods import get_method, query_indices
 
 
 class ToyBackend(DanceOPDBackend):
@@ -50,19 +50,24 @@ class ToyBackend(DanceOPDBackend):
         time_scale = 1.0 + query_index / max(1, int(self.cfg.training.rollout_steps))
         return x.roll(shifts=1, dims=-1) * route_scale + 0.1 * time_scale
 
-    def compute_loss(self, prompt: str, route) -> torch.Tensor:
-        x = self._prompt_vector(prompt)
-        indices = sample_query_indices(
-            int(self.cfg.training.rollout_steps),
-            int(self.cfg.training.k),
-            str(self.cfg.training.query_bias),
+    def compute_loss(self, sample, route) -> torch.Tensor:
+        x = self._prompt_vector(sample.prompt)
+        method = get_method(self.cfg.training.method)
+        indices = query_indices(
+            method, int(self.cfg.training.rollout_steps), int(self.cfg.training.k), str(self.cfg.training.query_bias)
         )
         total = None
         for idx in indices:
             state = x + float(idx) / max(1, int(self.cfg.training.rollout_steps))
             pred = self.student(state)
             target = self._teacher_velocity(state, route, idx)
-            loss = velocity_mse(pred, target) / len(indices)
+            weight = 1.0
+            if method.objective == "diffusion_kl":
+                weight = 0.5 / float(max(1, int(self.cfg.training.rollout_steps)) ** 2)
+            elif method.objective == "transition_kl":
+                weight = 1.0 / (2.0 * float(self.cfg.training.get("flowopd_noise_level", 0.7)) ** 2)
+            divisor = 1 if method.objective == "diffusion_kl" else len(indices)
+            loss = weight * velocity_mse(pred, target) / divisor
             total = loss if total is None else total + loss
         return total
 
@@ -78,11 +83,22 @@ class ToyBackend(DanceOPDBackend):
 
     def save(self, step: int) -> None:
         self.accelerator.wait_for_everyone()
-        if not self.accelerator.is_main_process:
-            return
-        out = step_dir(self.cfg.training.output_dir, step)
-        os.makedirs(out, exist_ok=True)
+        if self.accelerator.is_main_process:
+            out = step_dir(self.cfg.training.output_dir, step)
+            os.makedirs(out, exist_ok=True)
+            raw = self.accelerator.unwrap_model(self.student)
+            state = {k: v.detach().cpu().contiguous() for k, v in raw.state_dict().items()}
+            save_file(state, os.path.join(out, "toy_student.safetensors"))
+            save_trainer_state(self.optimizer, out, step)
+            print(f"[DanceOPD][toy] saved {out}", flush=True)
+        self.accelerator.wait_for_everyone()
+
+    def resume(self, checkpoint_dir: str) -> int:
+        from safetensors.torch import load_file
+
         raw = self.accelerator.unwrap_model(self.student)
-        state = {k: v.detach().cpu().contiguous() for k, v in raw.state_dict().items()}
-        save_file(state, os.path.join(out, "toy_student.safetensors"))
-        print(f"[DanceOPD][toy] saved {out}", flush=True)
+        raw.load_state_dict(load_file(os.path.join(checkpoint_dir, "toy_student.safetensors")))
+        step = load_trainer_state(self.optimizer, checkpoint_dir)
+        if self.accelerator.is_main_process:
+            print(f"[DanceOPD][toy] resumed {checkpoint_dir} at step={step}", flush=True)
+        return step

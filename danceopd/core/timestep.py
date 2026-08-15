@@ -4,6 +4,27 @@ from __future__ import annotations
 import random
 
 
+def rollout_grid(n_timesteps: int, steps: int) -> list[int]:
+    """Return ``steps + 1`` monotonic scheduler boundaries.
+
+    Schedulers that expose only ``steps`` denoising states do not contain the
+    terminal clean boundary; callers should append that boundary before using
+    this helper. Duplicate state indices are rejected rather than silently
+    changing the effective number of Euler steps.
+    """
+    if steps < 1 or n_timesteps < steps + 1:
+        raise ValueError(f"Need at least steps+1 boundaries, got n_timesteps={n_timesteps}, steps={steps}")
+    grid = [round(i * (n_timesteps - 1) / steps) for i in range(steps + 1)]
+    if len(set(grid)) != len(grid):
+        raise ValueError(f"Non-unique rollout grid: {grid}")
+    return grid
+
+
+def cfg_target(unconditional, conditional, scale: float):
+    """Affine field used for CFG absorption."""
+    return unconditional + float(scale) * (conditional - unconditional)
+
+
 def sample_query_indices(n_states: int, k: int = 1, bias: str = "low_t") -> list[int]:
     """Sample trajectory indices.
 

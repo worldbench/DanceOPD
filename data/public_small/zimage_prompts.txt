@@ -1,0 +1,5 @@
+task,prompt,source_image,target_image
+default,"A studio photograph of a red ceramic teapot",,
+default,"A poster saying 'DANCE OPD' in bold clean letters",,
+default,"Two blue cubes beside one yellow sphere",,
+default,"A watercolor landscape with a small stone bridge",,

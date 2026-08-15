@@ -1,0 +1,50 @@
+# Runnable public Z-Image-Turbo fallback. The student uses a downloadable
+# training-adapter warm start, while the frozen teacher is the clean base model.
+# Keeping them distinct avoids the zero-loss student==teacher smoke configuration.
+backend: zimage
+model:
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image-Turbo:transformer/*.safetensors,Tongyi-MAI/Z-Image-Turbo:text_encoder/*.safetensors,Tongyi-MAI/Z-Image-Turbo:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image-Turbo:tokenizer/"
+student:
+  init: "hf://ostris/zimage_turbo_training_adapter/zimage_turbo_training_adapter_v2.safetensors"
+  lora_rank: 64
+  lora_alpha: 64
+  # DiffSynth's adaLN module layout differs from Diffusers, so the public
+  # adapter's attention/FFN tensors are loaded and its adaLN tensors skipped.
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+teachers:
+  - name: base_teacher
+    base_ckpt: null
+    lora_dir: null
+routing:
+  granularity: optimizer_step
+  routes:
+    - {teacher: base_teacher, dataset: default, weight: 1.0}
+data:
+  prompts_csv: data/public_small/zimage_prompts.txt
+  prompt_column: prompt
+  task_column: task
+training:
+  method: danceopd
+  output_dir: outputs/zimage_public
+  resolution: 512
+  latent_channels: 16
+  latent_downsample_factor: 8
+  rollout_steps: 4
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  grad_accum: 1
+  max_train_steps: 2
+  save_steps: 1
+  mixed_precision: bf16
+  teacher_cfg_scale: 1.0
+  student_cfg_scale: 1.0
+  flowopd_noise_level: 0.7
+  # Cheap public probe; the updated Table-2 Flow-OPD recipe uses 16.
+  flowopd_group_size: 1
+  flowopd_clip_range: 1.0e-4
+  flowopd_kl_scale: -1.0
+  flowopd_anchor_beta: 0.0
+  use_gradient_checkpointing: true
+  log_every: 1

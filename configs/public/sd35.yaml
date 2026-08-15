@@ -1,0 +1,45 @@
+# Runnable public SD3.5-M recipe. Override training.method with
+# danceopd, diffusionopd, or flowopd.
+backend: sd35
+model:
+  # Official checkpoint. Accept its model license and authenticate with HF first.
+  pretrained_model: stabilityai/stable-diffusion-3.5-medium
+student:
+  init: jieliu/SD3.5M-FlowGRPO-Text
+  lora_rank: 8
+  lora_alpha: 8
+teachers:
+  - name: ocr
+    lora_dir: jieliu/SD3.5M-FlowGRPO-Text
+  - name: geneval
+    lora_dir: jieliu/SD3.5M-FlowGRPO-GenEval
+routing:
+  granularity: optimizer_step
+  routes:
+    - {teacher: ocr, dataset: ocr, weight: 1.0}
+    - {teacher: geneval, dataset: geneval, weight: 1.0}
+data:
+  prompts_csv: data/public_small/prompts.txt
+  prompt_column: prompt
+  task_column: task
+training:
+  method: danceopd
+  output_dir: outputs/sd35_public
+  resolution: 512
+  rollout_steps: 4
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  grad_accum: 1
+  max_train_steps: 2
+  save_steps: 1
+  mixed_precision: bf16
+  teacher_cfg_scale: 1.0
+  student_cfg_scale: 1.0
+  flowopd_noise_level: 0.7
+  # Cheap public probe; the updated Table-2 Flow-OPD recipe uses 16.
+  flowopd_group_size: 1
+  flowopd_clip_range: 1.0e-4
+  flowopd_kl_scale: -1.0
+  flowopd_anchor_beta: 0.0
+  log_every: 1

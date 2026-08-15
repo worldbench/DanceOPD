@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+build/
+dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -12,7 +14,9 @@ venv/
 .env
 
 # Training artifacts
-data/
+data/*
+!data/public_small/
+!data/public_small/*.txt
 models/
 checkpoints/
 outputs/

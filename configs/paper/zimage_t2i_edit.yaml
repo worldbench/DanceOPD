@@ -1,0 +1,37 @@
+# Paper topology: two buckets only, T2I + joint Edit.
+backend: zimage
+model:
+  model_id_with_origin_paths: "Tongyi-MAI/Z-Image:transformer/*.safetensors,Tongyi-MAI/Z-Image:text_encoder/*.safetensors,Tongyi-MAI/Z-Image:vae/diffusion_pytorch_model.safetensors"
+  tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
+student:
+  # The exact Table-2 main-run initialization is not stated in the manuscript.
+  init: /path/to/unspecified_main_table_student_init.safetensors
+  lora_rank: 128
+  lora_alpha: 128
+  lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
+teachers:
+  - {name: t2i, base_ckpt: null, lora_dir: null}
+  - {name: edit, base_ckpt: null, lora_dir: /path/to/joint_edit_teacher.safetensors}
+routing:
+  granularity: optimizer_step
+  routes:
+    - {teacher: t2i, dataset: t2i, weight: 1.0}
+    - {teacher: edit, dataset: edit, requires_source_image: true, weight: 1.0}
+data:
+  prompts_csv: null
+  prompt_column: prompt
+  task_column: task
+  source_image_column: source_image
+  target_image_column: target_image
+training:
+  method: danceopd
+  output_dir: null
+  resolution: 1024
+  rollout_steps: 16
+  k: 1
+  query_bias: low_t
+  lr: 2.0e-4
+  grad_accum: 4
+  max_train_steps: 3000
+  save_steps: 300
+  mixed_precision: bf16

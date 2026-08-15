@@ -1,6 +1,5 @@
 # Official DiffSynth example-data smoke-test config for Z-Image through DiffSynth-Studio.
-# This uses the base model as the frozen teacher and prompts extracted from
-# DiffSynth-Studio/diffsynth_example_dataset.
+# The public warm start and clean base teacher produce a nonzero update.
 
 backend: zimage
 
@@ -10,9 +9,9 @@ model:
   tokenizer_path: "Tongyi-MAI/Z-Image:tokenizer/"
 
 student:
-  init: base
-  lora_rank: 8
-  lora_alpha: 8
+  init: "hf://ostris/zimage_turbo_training_adapter/zimage_turbo_training_adapter_v2.safetensors"
+  lora_rank: 64
+  lora_alpha: 64
   lora_target_modules: [to_q, to_k, to_v, to_out.0, w1, w2, w3]
 
 teachers:
